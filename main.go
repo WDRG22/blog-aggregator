@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"log"
+	"database/sql"
 	"github.com/wdrg22/blog-aggregator/internal/config"
+	"github.com/wdrg22/blog-aggregator/internal/database"
 )
 
-dbURL = "postgres://postgres:postgres@localhost:5432/gator"
+var dbURL string = "postgres://postgres:postgres@localhost:5432/gator"
 
 type state struct {
 	cfg *config.Config
@@ -32,7 +34,7 @@ func main() {
 	// Store config and db queries in program state
 	programState := &state{
 		cfg: &cfg,
-		db: &dbQueries
+		db: dbQueries,
 	}
 
 	// Register cli commands
@@ -40,6 +42,9 @@ func main() {
 		registeredCommands: make(map[string]func(*state, command) error),
 	}
 	cmds.register("login", handlerLogin)
+	cmds.register("register", handlerRegister)
+	cmds.register("reset", handlerReset)
+	cmds.register("users", handlerUsers)
 
 	if len(os.Args) < 2 {
 		log.Fatal("Usage: cli <command> [args...]")
