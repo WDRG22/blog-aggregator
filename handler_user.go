@@ -38,7 +38,7 @@ func handlerLogin(s *state, cmd command) error {
 func handlerRegister(s *state, cmd command) error {
         // Ensure proper usage of register command
         if len(cmd.args) != 1 {
-                return fmt.Errorf("Usage: %w <name>", cmd.name)
+                return fmt.Errorf("Usage: %s <name>", cmd.name)
         }
         name := cmd.args[0]
 
@@ -92,7 +92,11 @@ func handlerUsers(s *state, cmd command) error {
 		return fmt.Errorf("Error retrieving users: %w", err)
 	}
 	for _, user := range users {
-		fmt.Println(user)
+		if user.Name == s.cfg.CurrentUserName{
+			fmt.Printf("* %s (current)\n", user.Name)
+		} else {
+			fmt.Printf("* %s\n", user.Name)
+		}
 	}
 	return nil
 }
