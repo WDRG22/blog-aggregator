@@ -10,5 +10,11 @@ VALUES (
 )
 RETURNING *;
 
+-- name: GetFeeds :many
+SELECT * FROM feeds;
+
+-- name: GetFeedByUrl :one
+SELECT * FROM feeds WHERE feeds.Url = $1;
+
 -- name: DeleteFeeds :exec
 DELETE FROM feeds;
