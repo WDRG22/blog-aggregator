@@ -66,14 +66,13 @@ func handlerRegister(s *state, cmd command) error {
         }
 
         // Set current user to new user in config
-        err = s.cfg.SetUser(name)
+        err = s.cfg.SetUser(user.Name)
         if err != nil {
                 fmt.Errorf("Error updating config with new user: %w", err)
         }
 
         // Print new user data
-        fmt.Println("User was created")
-        fmt.Println(user)
+        fmt.Printf("User \"%s\" has been registered\n", user.Name)
         return nil
 }
 

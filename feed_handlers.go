@@ -20,19 +20,11 @@ func handlerAgg(s *state, cmd command) error {
         return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
         // Ensure correct usage
         if len(cmd.args) != 2 {
                 return fmt.Errorf("Usage: %s <name> <url>", cmd.name)
         }
-
-        // Get current user from db
-        currentUserName := s.cfg.CurrentUserName
-        currentUserRecord, err := s.db.GetUser(context.Background(), currentUserName)
-        if err != nil {
-                return fmt.Errorf("Error getting current user from database: %w", err)
-        }
-
 
         // Create new feed parameters
         feedName := cmd.args[0]
@@ -43,7 +35,7 @@ func handlerAddFeed(s *state, cmd command) error {
                 UpdatedAt:      time.Now(),
                 Name:           feedName,
                 Url:            feedURL,
-                UserID:         currentUserRecord.ID,
+                UserID:         user.ID,
         }
 
         // Create feed record in database
@@ -64,12 +56,12 @@ func handlerAddFeed(s *state, cmd command) error {
 		name: "follow",
 		args: []string{feedURL},
 	}
-	err = handlerFollow(s, followCmd)
+	err = handlerFollow(s, followCmd, user)
 	if err != nil {
 		return fmt.Errorf("Error running follow command within addfeed cmd: %w", err)
 	}
 
-        fmt.Printf("Successfully added new feed: %s\n", feedName)
+        fmt.Println("Successfully added new feed")
 	fmt.Printf("Name: %s\n", feedRecord.Name)
 	fmt.Printf("URL: %s\n", feedRecord.Url)
         return nil
@@ -87,14 +79,13 @@ func handlerFeeds(s *state, cmd command) error {
 	}
 
 	for _, feed := range feeds {
-		userRecord, err := s.db.GetUserById(context.Background(), feed.UserID)
+		user, err := s.db.GetUserById(context.Background(), feed.UserID)
 		if err != nil {
-			return fmt.Errorf("Error retrieving user record for feed \"%s\": %w", feed.Name, err)
+			return err
 		}
-		userName := userRecord.Name
 		fmt.Printf("Name: %s\n", feed.Name)
 		fmt.Printf("URL: %s\n", feed.Url)
-		fmt.Printf("Created By: %s\n\n", userName)
+		fmt.Printf("Created By: %s\n\n", user.Name)
 	}
 	return nil
 }

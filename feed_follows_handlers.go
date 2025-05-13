@@ -11,15 +11,9 @@ import (
 )
 
 
-func handlerFollow(s *state, cmd command) error {
+func handlerFollow(s *state, cmd command, user database.User) error {
 	if len(cmd.args) != 1 {
 		return fmt.Errorf("Usage: %s <url>", cmd.name)
-	}
-
-	// Get current user from db
-	currUserRecord, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
-	if err != nil {
-		return err
 	}
 
 	// Get feed record from db by url
@@ -34,7 +28,7 @@ func handlerFollow(s *state, cmd command) error {
 		ID:		uuid.New(),
 		CreatedAt:	time.Now(),
 		UpdatedAt:	time.Now(),
-		UserID:		currUserRecord.ID,
+		UserID:		user.ID,
 		FeedID:		feedRecord.ID,		
 	}
 	feedFollowRecord, err := s.db.CreateFeedFollow(context.Background(), feedFollowParams)
@@ -52,19 +46,13 @@ func handlerFollow(s *state, cmd command) error {
 	return nil
 }
 
-func handlerFollowing(s *state, cmd command) error {
+func handlerFollowing(s *state, cmd command, user database.User) error {
 	if len(cmd.args) > 0 {
 		return fmt.Errorf("Usage: %s", cmd.name)
 	}
 
-	// Get current user ID
-	userRecord, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("Failed to get user record: %w", err)
-	}
-	
 	// Get feed-follow records by user ID
-	feedFollowRecords, err := s.db.GetFeedFollowsForUser(context.Background(), userRecord.ID) 
+	feedFollowRecords, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID) 
 	if err != nil {
 		return fmt.Errorf("Error retrieving feed-follow records: %w", err)
 	}
