@@ -14,7 +14,7 @@ type RSSFeed struct {
 		Title		string		`xml:"title"`
 		Link		string		`xml:"link"`
 		Description	string		`xml:"description"`
-		Item		[]RSSItem 	`xml:"item"`
+		Items		[]RSSItem 	`xml:"item"`
 	} `xml:"channel"`
 }
 
@@ -23,6 +23,32 @@ type RSSItem struct {
 	Link		string		`xml:"link"`
 	Description	string		`xml:"description"`
 	PubDate		string		`xml:"pubDate"`
+} 
+
+func scrapeFeeds(s *state) error {
+	nextFeedRecord, err := s.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return fmt.Errorf("Error getting next feed: %w", err)
+	}
+
+	err = s.db.MarkFeedFetched(context.Background(), nextFeedRecord.ID)
+	if err != nil {
+		return fmt.Errorf("Error marking feed as fetched: %w", err)
+	}
+
+	feed, err := fetchFeed(context.Background(), nextFeedRecord.Url) 
+	if err != nil {
+		return fmt.Errorf("Error fetching feed: %w", err)
+	}
+
+	for _, item := range feed.Channel.Items {
+		fmt.Printf("Title: %s\n", item.Title)
+		fmt.Printf("Link: %s\n", item.Link)
+		fmt.Printf("Description: %s", item.Description)
+		fmt.Printf("PubDate: %s\n", item.PubDate)
+		fmt.Printf("\n\n")
+	}
+	return nil
 }
 	
 func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
@@ -63,7 +89,7 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 	// Decode escaped HTML entities in channel and item titles and descriptions
 	rssFeed.Channel.Title = html.UnescapeString(rssFeed.Channel.Title)
 	rssFeed.Channel.Description = html.UnescapeString(rssFeed.Channel.Description)
-	for _, item := range rssFeed.Channel.Item {
+	for _, item := range rssFeed.Channel.Items {
 		item.Title = html.UnescapeString(item.Title)
 		item.Description = html.UnescapeString(item.Description)
 	}

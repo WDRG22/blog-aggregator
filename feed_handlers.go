@@ -12,12 +12,32 @@ import (
 
 
 func handlerAgg(s *state, cmd command) error {
-        rssFeed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
-        if err != nil {
-                return fmt.Errorf("Error fetching feed: %w", err)
-        }
-        fmt.Println(rssFeed)
-        return nil
+	if len(cmd.args) != 1 {
+		return fmt.Errorf("Usage: %s <_h/s/m>", cmd.name)
+	}
+
+	timeBetweenReqs, err := time.ParseDuration(cmd.args[0])
+	if err != nil {
+		return err
+	}
+
+	// Calculate h, m, s from timeBetweenReqs to print
+	hours := timeBetweenReqs / time.Hour
+	remainingDuration := timeBetweenReqs % time.Hour
+	mins := remainingDuration / time.Minute
+	remainingDuration = remainingDuration % time.Minute
+	secs := remainingDuration / time.Second	
+
+	fmt.Printf("Collecting feeds every %dh %dm %ds\n", hours, mins, secs) 
+	ticker := time.NewTicker(timeBetweenReqs)
+	defer ticker.Stop()
+	for ; ; <-ticker.C {
+		err := scrapeFeeds(s)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func handlerAddFeed(s *state, cmd command, user database.User) error {
