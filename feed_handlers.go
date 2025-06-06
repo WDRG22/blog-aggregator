@@ -5,6 +5,7 @@ import (
         "context"
         "time"
         "os"
+	"strconv"
         "github.com/lib/pq"
         "github.com/google/uuid"
         "github.com/wdrg22/blog-aggregator/internal/database"
@@ -106,6 +107,31 @@ func handlerFeeds(s *state, cmd command) error {
 		fmt.Printf("Name: %s\n", feed.Name)
 		fmt.Printf("URL: %s\n", feed.Url)
 		fmt.Printf("Created By: %s\n\n", user.Name)
+	}
+	return nil
+}
+
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	limit := 2
+	if len(cmd.args) > 0 {
+		parsedLimit, err := strconv.ParseInt(cmd.args[0], 10, 32)
+		if err == nil {
+			limit = int(parsedLimit)
+		}
+	}
+
+	getPostParams := database.GetPostsForUserParams{UserID: user.ID, Limit: int32(limit)}
+
+	postRecords, err := s.db.GetPostsForUser(context.Background(), getPostParams)
+	if err != nil {
+		return fmt.Errorf("Error retrieving posts: %w", err)
+	}
+
+	for _, post := range postRecords {
+		fmt.Printf("\nTitle: %s\n", post.Title.String)
+		fmt.Printf("URL: %s\n", post.Url)
+		fmt.Printf("PubDate: %s\n", post.PublishedAt)
+		fmt.Printf("Description: %s\n", post.Description.String)
 	}
 	return nil
 }
