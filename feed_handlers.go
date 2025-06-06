@@ -63,7 +63,7 @@ func handlerAddFeed(s *state, cmd command, user database.User) error {
         if err != nil {
                 // If feed already exists, return 1
                 if pqErr, ok := err.(*pq.Error); ok {
-                        if pqErr.Code.Name() == "unique_violation" {
+                        if pqErr.Code.Name() == "unique_violation"{
                                 os.Exit(1)
                         }
                 }
