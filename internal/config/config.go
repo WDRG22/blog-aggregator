@@ -2,72 +2,50 @@ package config
 
 import (
 	"os"
-	"encoding/json"
-	"path/filepath"
+	"log"
+	"strconv"
+	"time"
 )
 
-const configFileName = ".gatorconfig.json"
 
 type Config struct {
-	DbURL		string	`json:"db_url"`
-	CurrentUserName	string	`json:"current_user_name"`
+	Port		string
+	DatabaseURL	string
+	WorkerCount	int
+	WorkerInterval	time.Duration
 }
 
-func (cfg *Config) SetUser(username string) error {
-	cfg.CurrentUserName = username
-	return write(*cfg)
-
-}
-
-func Read() (Config, error) {
-	filePath, err := getConfigFilePath()
-	if err != nil {
-		return Config{}, err
+// Read configuration from environment variables and return Config struct
+func Load() (*Config, error) {
+	port := os.Getenv("PORT")
+	if port == ""{ // Default to 8080
+		port = "8080"
 	}
 
-	file, err := os.Open(filePath)
-	if err != nil {
-		return Config{}, err	
-	}
-	defer file.Close()
-
-	decoder := json.NewDecoder(file)
-	cfg := Config{}
-	err = decoder.Decode(&cfg)
-	if err != nil {
-		return Config{}, err
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" { // Default to local db value
+		dbURL = "postgres://postgres:postgres@localhost:5432/gator?sslmode=disable"
+		log.Println("WARNING: DATABASE_URL not set, using default local value.")
 	}
 
-	return cfg, nil
-}
-
-func write(cfg Config) error {
-	filePath, err := getConfigFilePath()
+	workerCountStr := os.Getenv("WORKER_COUNT")
+	if workerCountStr == "" { // Default worker count
+		workerCountStr = "10"
+	}
+	workerCount, err := strconv.Atoi(workerCountStr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	file, err := os.Create(filePath)
+	intervalSeconds, err := strconv.Atoi(intervalStr)
 	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	err = encoder.Encode(cfg)
-	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
-}
-
-func getConfigFilePath() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	filePath := filepath.Join(homeDir, configFileName)
-	return filePath, nil
+	return &Config{
+		Port:		port,
+		DatabaseURL:	dbURL,
+		WorkerCount:	workerCount,
+		WorkerInterval:	time.Duration(intervalSeconds)
+	}, nil
 }
