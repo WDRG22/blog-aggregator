@@ -10,34 +10,29 @@ import (
 	"net/http"
 	"embed"
 	"html/template"
+	"github.com/lib/pq"
+	"github.com/joho/godotenv"
 	"github.com/wdrg22/blog-aggregator/internal/config"
 	"github.com/wdrg22/blog-aggregator/internal/database"
 	"github.com/wdrg22/blog-aggregator/pkg/handlers"
-	"github.com/lib/pq"
+	"github.com/wdrg22/blog-aggregator/ui"
 )
-
-//go:embed all:../../ui/templates
-var templateFiles embed.FS
-
-//go:embed all:../../ui/static
-var staticFiles embed.FS
 
 
 func main() {
 	// -- CONFIGURATION --
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080" // Default port if unspecified
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Note: .env file not found, reading from environment")
 	}
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://postgres:postgres@localhost:5432/gator?sslmode=disable"
-		log.Println("DATABASE_URL not set, using default local connection")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
 	}
-	
+
 	// -- DATABASE CONNECTION --
-	db, err := sql.Open("postgres", dbURL)
+	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -47,6 +42,9 @@ func main() {
 		log.Fatalf("Failed to ping database: %v", err)
 	}
 	dbQueries := database.New(db)
+
+	// -- START BACKGROUND WORKER
+	go worker.Start(dbQueries, cfg.WorkerCount, cfg.WorkerInterval)
 
 	// -- TEMPLATE PARSING --
 	templates, err := template.ParseFS(templateFiles, "templates/**/*.html")
@@ -82,11 +80,11 @@ func main() {
 	handler := handlers.MiddlewareLogging(mux)
 
 	server := &http.Server{
-		Addr: fmt.Sprintf(":%s", port),
+		Addr: fmt.Sprintf(":%s", cfgPport),
 		Handler: handler,
 	}
 
-	log.Printf("Starting web server on http://localhost:%s", port)
+	log.Printf("Starting web server on http://localhost:%s", cfg.Port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
