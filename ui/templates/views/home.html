@@ -1,0 +1,14 @@
+{{template "base" .}} {{define "content"}}
+    <h2>Your Followed Feeds</h2>
+    <div id="feed-list">
+        {{template "feed_list.html" .Feeds}}
+    </div>
+    
+    <hr>
+
+    <h3>Add a New Feed</h3>
+    <form hx-post="/feeds" hx-swap="outerHTML" hx-target="#feed-list">
+        <input type="url" name="url" placeholder="https://example.com/feed.xml" required>
+        <button type="submit">Follow Feed</button>
+    </form>
+{{end}}
