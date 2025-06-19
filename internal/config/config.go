@@ -37,15 +37,22 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	intervalStr := os.Getenv("WORKER_INTERVAL_SECONDS")
+	if intervalStr == "" {
+		intervalStr = "60" // Default
+	}
 	intervalSeconds, err := strconv.Atoi(intervalStr)
 	if err != nil {
 		return nil, err
 	}
 
+	// Conver ns to sec
+	workerInterval := time.Duration(intervalSeconds) * time.Second
+
 	return &Config{
 		Port:		port,
 		DatabaseURL:	dbURL,
 		WorkerCount:	workerCount,
-		WorkerInterval:	time.Duration(intervalSeconds)
+		WorkerInterval:	workerInterval,
 	}, nil
 }
