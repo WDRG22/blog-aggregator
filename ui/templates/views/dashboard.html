@@ -1,0 +1,35 @@
+{{template "base" .}}
+
+{{define "content"}}
+    <h2>Welcome!</h2>
+
+    <div class="container">
+        <div class="feeds-column">
+            <h3>Your Feeds</h3>
+            <form hx-post="/feeds" hx-target="#feed-list" hx-swap="innerHTML">
+                <input type="url" name="url" placeholder="https://example.com/rss.xml" required>
+                <button type="submit">Add Feed</button>
+            </form>
+            <hr>
+            <div id="feed-list">
+                {{template "feed_list.html" .FeedFollows}}
+            </div>
+        </div>
+
+        <div class="posts-column">
+            <h3>Latest Posts</h3>
+            <div id="post-list">
+                {{range .Posts}}
+                    <div class="post-item">
+                        <h4><a href="{{.Url}}" target="_blank" rel="noopener noreferrer">{{.Title.String}}</a></h4>
+                        <p>{{.Description.String}}</p>
+                        <small>Published on {{.PublishedAt.Format "Jan 02, 2006"}}</small>
+                    </div>
+                {{else}}
+                    <p>No posts found. Add some feeds and wait for the worker to run!</p>
+                {{end}}
+            </div>
+        </div>
+    </div>
+{{end}}
+

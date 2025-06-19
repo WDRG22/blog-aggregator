@@ -1,0 +1,15 @@
+{{template "base" .}}
+
+{{define "content"}}
+    <div class="auth-container">
+        <h2>Login</h2>
+        <form hx-post="/users/login" hx-target="body">
+            <label for="login-name">Username:</label>
+            <input id="login-name" type="text" name="name" required>
+            <button type="submit">Login</button>
+        </form>
+	    <a href="/register">Don't have an account? Click here to register</a>
+	<hr/>
+    </div>
+{{end}}
+
