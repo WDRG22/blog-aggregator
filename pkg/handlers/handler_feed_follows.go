@@ -1,87 +1,85 @@
-package main
+package handlers
 
 import (
-        "fmt"
-        "context"
+	"net/http"
         "time"
-        "os"
-        "github.com/lib/pq"
         "github.com/google/uuid"
         "github.com/wdrg22/blog-aggregator/internal/database"
+        "github.com/wdrg22/blog-aggregator/pkg/middleware"
 )
 
 
-func handlerFollow(s *state, cmd command, user database.User) error {
-	if len(cmd.args) != 1 {
-		return fmt.Errorf("Usage: %s <url>", cmd.name)
+// Handles "POST /feed_follows"
+// Creates new feed_follow record for logged-in user
+func (cfg *ApiConfig) HandlerCreateFeedFollow(w http.ResponseWriter, r *http.Request) {
+	// Get authenticated user from context
+	user, ok := r.Context().Value(middleware.UserContextKey).(database.User)
+	if !ok {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
 	}
 
-	// Get feed record from db by url
-	feedUrl := cmd.args[0]
-	feedRecord, err := s.db.GetFeedByUrl(context.Background(), feedUrl)
+	// Get feed_id from form data. In UI, this will be hidden input
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+	feedIDStr := r.PostFormValue("feed_id")
+	feedID, err := uuid.Parse(feedIDStr)
 	if err != nil {
-		return err
+		http.Error(w, "Invalid Feed ID", http.StatusBadRequest)
+		return
 	}
 
-	// Create new feed-follow record for current user in db
+	// Create feed_follow record in db
 	feedFollowParams := database.CreateFeedFollowParams{
 		ID:		uuid.New(),
 		CreatedAt:	time.Now(),
 		UpdatedAt:	time.Now(),
 		UserID:		user.ID,
-		FeedID:		feedRecord.ID,		
+		FeedID:		feedID,		
 	}
-	feedFollowRecord, err := s.db.CreateFeedFollow(context.Background(), feedFollowParams)
-        if err != nil {
-                // If feed already exists, return 1
-                if pqErr, ok := err.(*pq.Error); ok {
-                        if pqErr.Code.Name() == "unique_violation" {
-                                os.Exit(1)
-                        }
-                }
-                // Else return err
-                return fmt.Errorf("Error adding new feed: %w", err)
-        }
-	fmt.Printf("%s is now following %s\n", feedFollowRecord.UserName, feedFollowRecord.FeedName)
-	return nil
+	feedFollow, err := cfg.DB.CreateFeedFollow(r.Context(), feedFollowParams)
+	if err != nil {
+		http.Error(w, "Failed to follow feed", http.StatusInternalServerError)
+		return
+	}
+
+	// Pass new feedFollow record to template
+	cfg.renderPage(w, http.StatusOK, "unfollow_button.html", feedFollow)
 }
 
-func handlerFollowing(s *state, cmd command, user database.User) error {
-	if len(cmd.args) > 0 {
-		return fmt.Errorf("Usage: %s", cmd.name)
+// Handles "DELETE /feed_follows/{feedFollowID}"
+// Deletes a feed_follow record for the logged-in user
+func (cfg *ApiConfig) HandlerDeleteFeedFollow(w http.ResponseWriter, r *http.Request) {
+	// Get authenticated user from context
+	user, ok := r.Context().Value(middleware.UserContextKey).(database.User)
+	if !ok {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
 	}
 
-	// Get feed-follow records by user ID
-	feedFollowRecords, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID) 
+	// Get feedFollowID from URL path
+	feedFollowIDStr := r.PathValue("feedFollowID")
+	feedFollowID, err := uuid.Parse(feedFollowIDStr)
 	if err != nil {
-		return fmt.Errorf("Error retrieving feed-follow records: %w", err)
+		http.Error(w, "Invalid Feed Follow ID", http.StatusBadRequest)
+		return
 	}
 
-	// Print name of feeds being followed 
-	for _, record := range feedFollowRecords {
-		fmt.Println(record.FeedName)
+	// Delete record from db
+	deleteFeedFollowParams := database.DeleteFeedFollowParams{
+		ID:	feedFollowID,
+		UserID:	user.ID,
 	}
-	return nil
-
-}
-
-func handlerUnfollow(s *state, cmd command, user database.User) error {
-	if len(cmd.args) != 1 {
-		return fmt.Errorf("Usage: %s <url>", cmd.name)
-	}
-	feedUrl := cmd.args[0]
-	
-	// Get Feed record from db
-	feed, err := s.db.GetFeedByUrl(context.Background(), feedUrl)
+	err = cfg.DB.DeleteFeedFollow(r.Context(), deleteFeedFollowParams)
 	if err != nil {
-		return err
+		http.Error(w, "Failed to unfollow feed", http.StatusInternalServerError)
+		return
 	}
-	params := database.DeleteFeedFollowParams{user.ID, feed.ID}
 
-	// Delete feed-follow record
-	err = s.db.DeleteFeedFollow(context.Background(), params) 
-	if err != nil {
-		return fmt.Errorf("Error deleting feed-follow record from database: %w", err)
-	}
-	return nil
+	// This endpoint is called via HTMX'S hx-delete. 
+	// Since the button will be swapped out by a different mechanism, 
+	// (e.g. swapping a whole list item), we can just return a 200 ok status with no content
+	w.WriteHeader(http.StatusOK)
 }

@@ -1,107 +1,111 @@
-package main
+package handlers
 
 import (
-        "fmt"
-        "context"
         "time"
-        "os"
-        "github.com/lib/pq"
+	"net/http"
+	"github.com/lib/pq"
         "github.com/google/uuid"
         "github.com/wdrg22/blog-aggregator/internal/database"
 )
 
 
-func handlerLogin(s *state, cmd command) error {
-        // Ensure proper usage of login command
-        if len(cmd.args) != 1 {
-                return fmt.Errorf("Usage: %s <name>", cmd.name)
-        }
-        userName := cmd.args[0]
 
-        // Check if user in database
-        _, err := s.db.GetUser(context.Background(), userName)
-        if err != nil {
-                return fmt.Errorf("User does not exist in database: %w", err)
-        }
-
-        // Set user in config
-        err = s.cfg.SetUser(userName)
-        if err != nil {
-                return fmt.Errorf("Failed to set current user: %w\n", err)
-        }
-
-        fmt.Printf("User has been set to: %s\n", userName)
-        return nil
+// Renders login page
+func (cfg *ApiConfig) HandlerLoginPage(w http.ResponseWriter, r *http.Request) {
+	cfg.renderPage(w, http.StatusOK, "login.html", nil)
 }
 
+// Renders register page
+func (cfg *ApiConfig) HandlerRegisterPage(w http.ResponseWriter, r *http.Request) {
+	cfg.renderPage(w, http.StatusOK, "register.html", nil)
+}
 
-func handlerRegister(s *state, cmd command) error {
-        // Ensure proper usage of register command
-        if len(cmd.args) != 1 {
-                return fmt.Errorf("Usage: %s <name>", cmd.name)
-        }
-        name := cmd.args[0]
+// Responds to registration POST request by creating new user in db and redirecting browser to homepage or displaying an error
+func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
+	// Get input data from form	
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+        name := r.PostFormValue("name")
+	if name == "" {
+		http.Error(w, "Name cannot be empty", http.StatusBadRequest)
+		return
+	}
 
-        // Create new user parameters
+        // Create new user in database
         userParams := database.CreateUserParams{
                 ID:             uuid.New(),
                 CreatedAt:      time.Now(),
                 UpdatedAt:      time.Now(),
                 Name:           name,
         }
-
-        // Create user in db
-        user, err := s.db.CreateUser(context.Background(), userParams)
-
-        // Catch errors
+        user, err := cfg.DB.CreateUser(r.Context(), userParams)
         if err != nil {
-                // If user already exists, return 1
-                if pqErr, ok := err.(*pq.Error); ok {
-                        if pqErr.Code.Name() == "unique_violation" {
-                                os.Exit(1)
-                        }
+                if pqErr, ok := err.(*pq.Error); ok && pqErr.Code.Name() == "unique_violation" {
+			http.Error(w, "A user with that name already exists", http.StatusConflict) // 409 Conflict
+			return
                 }
-                // Else return err
-                return fmt.Errorf("Error registering new user: %w", err)
+		http.Error(w, "Error registering new user", http.StatusInternalServerError)
+		return
         }
 
-        // Set current user to new user in config
-        err = s.cfg.SetUser(user.Name)
-        if err != nil {
-                fmt.Errorf("Error updating config with new user: %w", err)
-        }
+	// Set a session cookie and redirect
+	http.SetCookie(w, &http.Cookie{
+		Name:		"session_user",
+		Value:		user.Name,
+		Path:		"/",
+		Expires:	time.Now().Add(72 * time.Hour),
+		HttpOnly:	true,
+		SameSite:	http.SameSiteLaxMode,
+	})
 
-        // Print new user data
-        fmt.Printf("User \"%s\" has been registered\n", user.Name)
-        return nil
+	// Tell browser to redirect to homepage via htmx
+	w.Header().Set("HX-Redirect", "/")
+	w.WriteHeader(http.StatusOK)
 }
 
-func handlerReset(s *state, cmd command) error {
-        err := s.db.DeleteUsers(context.Background())
-        if err != nil {
-                return fmt.Errorf("Error deleting all users: %w", err)
-        }
-        fmt.Println("Successfully deleted all users")
-        return nil
+func (cfg *ApiConfig) HandlerLogin(w http.ResponseWriter, r *http.Request) {
+	// Get input data from form
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+	name := r.PostFormValue("name")
+
+	// Check if user exists in db
+	if _, err := cfg.DB.GetUser(r.Context(), name); err != nil {
+		http.Error(w, "Invalid username", http.StatusUnauthorized)
+		return
+	}
+
+	// Set session cookie and redirect
+	http.SetCookie(w, &http.Cookie{
+		Name:		"session_user",
+		Value:		name,
+		Path:		"/",
+		Expires:	time.Now().Add(72 * time.Hour),
+		HttpOnly:	true,
+		SameSite:	http.SameSiteLaxMode,
+	})
+
+	// Tell browser to redirect to homepage via htmx
+	w.Header().Set("HX-Redirect", "/")
+	w.WriteHeader(http.StatusOK)
 }
 
-func handlerUsers(s *state, cmd command) error {
-        users, err := s.db.GetUsers(context.Background())
-        if err != nil{
-                return fmt.Errorf("Error retrieving users: %w", err)
-        }
+func (cfg *ApiConfig) HandlerLogout(w http.ResponseWriter, r *http.Request) {
+	// To 'delete' cookie, we set it with same name but expired date in the past
+	http.SetCookie(w, &http.Cookie{
+		Name:		"session_user",
+		Value:		"",
+		Path:		"/",
+		Expires:	time.Unix(0,0),
+		HttpOnly:	true,
+		SameSite:	http.SameSiteLaxMode,
+	})
 
-        if len(users) == 0 {
-                fmt.Println("No registered users")
-                return nil
-        }
-
-        for _, user := range users {
-                if user.Name == s.cfg.CurrentUserName{
-                        fmt.Printf("* %s (current)\n", user.Name)
-                } else {
-                        fmt.Printf("* %s\n", user.Name)
-                }
-        }
-        return nil
+	// Tell browser to redirect to login page via htmx
+	w.Header().Set("HX-Redirect", "/login")
+	w.WriteHeader(http.StatusOK)
 }
