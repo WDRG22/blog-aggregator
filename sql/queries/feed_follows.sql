@@ -34,7 +34,4 @@ INNER JOIN
 WHERE
 	feed_follows.user_id = $1;
 -- name: DeleteFeedFollow :exec
-DELETE FROM feed_follows WHERE user_id = $1 AND feed_id = $2;
-
--- name: DeleteFeedFollows :exec
-DELETE FROM feed_follows;
+DELETE FROM feed_follows WHERE id = $1 AND user_id = $2;
